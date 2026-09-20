@@ -1,0 +1,13 @@
+track_id,actual_plate,predicted_plate,exact_match,character_accuracy,edit_distance,ocr_confidence,observation_count,consensus_count
+1,NA13NRU,MU51VSU,False,0.1429,6,0.748,108,15
+5,AP05JE0,AP05JEO,False,0.8571,1,0.883,198,101
+7,GXI50GJ,BG65USJ,False,0.2857,5,0.8832,66,39
+25,BG65USJ,AK64DMV,False,0.1429,6,0.8514,274,148
+28,FJI42HY,EY61NBG,False,0.0,7,0.868,167,85
+35,EY6INBG,,False,0.0,7,0.0,0,0
+54,AV0BHVF,GJ05EPD,False,0.1429,6,0.8874,287,139
+64,GJ06EPD,,False,0.0,7,0.0,0,0
+67,AK64DMV,,False,0.0,7,0.0,6,0
+73,KH06KSU,EF10DZT,False,0.0,7,0.8536,162,101
+86,EF10DZT,,False,0.0,7,0.0,0,0
+95,EY09VWS,,False,0.0,7,0.0,0,0
