@@ -53,7 +53,7 @@ export default function Sidebar() {
         <div>
 
           <h1 className="text-xl font-bold tracking-tight text-[#f1f5f9]">
-            CityAI
+            CityTraceAI
           </h1>
 
           <p className="text-xs text-[#81909e]">

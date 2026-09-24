@@ -6,6 +6,8 @@ import {
   useState,
 } from "react";
 
+import { useRouter } from "next/navigation";
+
 import {
   getCameras,
   getProcessingStatus,
@@ -72,6 +74,10 @@ const stages = [
 // ============================================================
 
 export default function VideoPage() {
+
+  const router = useRouter();
+
+  const redirectingRef = useRef(false);
 
   const [cameras, setCameras] =
     useState<Camera[]>([]);
@@ -197,7 +203,7 @@ export default function VideoPage() {
   // CHECK PROCESSING STATUS
   // ==========================================================
 
-  async function checkProcessingStatus(
+    async function checkProcessingStatus(
     jobId: string
   ) {
 
@@ -211,13 +217,39 @@ export default function VideoPage() {
       setJob(data);
 
 
-      // Stop polling when finished
+      // ======================================================
+      // PROCESSING FINISHED
+      // ======================================================
+
       if (
         data.status === "completed" ||
         data.status === "failed"
       ) {
 
         stopPolling();
+
+      }
+
+
+      // ======================================================
+      // SUCCESS → RETURN TO DASHBOARD
+      // ======================================================
+
+      if (
+        data.status === "completed" &&
+        !redirectingRef.current
+      ) {
+
+        redirectingRef.current = true;
+        sessionStorage.setItem(
+  "citytrace_latest_processing",
+  JSON.stringify({
+    job_id: data.job_id,
+    camera_code: data.camera_code,
+    filename: data.filename,
+    completed_at: new Date().toISOString(),
+  })
+);
 
       }
 
@@ -329,6 +361,8 @@ export default function VideoPage() {
     setResult(null);
     setJob(null);
 
+    redirectingRef.current = false;
+
     stopPolling();
 
 
@@ -380,6 +414,15 @@ export default function VideoPage() {
 
 
       setResult(data);
+
+      sessionStorage.setItem(
+  "citytrace_latest_processing",
+  JSON.stringify({
+    job_id: data.job_id,
+    camera_code: data.camera_code,
+    filename: data.filename,
+  })
+);
 
       setSelectedFile(null);
 
@@ -1225,36 +1268,46 @@ export default function VideoPage() {
 
           {job.status === "completed" && (
 
-            <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4">
+  <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-5">
 
-              <div className="flex items-start gap-3">
+    <div className="flex items-start gap-3">
 
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
-                  ✓
-                </div>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
+        ✓
+      </div>
 
+      <div className="min-w-0">
 
-                <div>
+        <p className="text-sm font-semibold text-green-800">
+          AI Processing Completed
+        </p>
 
-                  <p className="text-sm font-semibold text-green-700">
-                    AI Processing Completed
-                  </p>
+        <p className="mt-1 text-sm text-green-700">
+          The traffic video has been processed
+          successfully. Vehicle detection, ANPR,
+          tracking, database logging and traffic
+          intelligence results are now available.
+        </p>
 
+        <p className="mt-3 text-xs font-medium text-green-600">
+          Returning to CityTrace AI Dashboard...
+        </p>
 
-                  <p className="mt-1 text-sm text-green-600">
-                    The traffic video has finished
-                    processing successfully.
-                    Detection results have been
-                    processed by the CityAI engine.
-                  </p>
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="mt-4 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+        >
+          View Dashboard Now
+        </button>
 
-                </div>
+      </div>
 
-              </div>
+    </div>
 
-            </div>
+  </div>
 
-          )}
+)}
 
 
           {/* =================================================

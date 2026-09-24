@@ -18,7 +18,8 @@ def seed_cameras():
             road_name="Delhi Road",
             direction="North",
             location="Main Road Junction",
-            is_active=True
+            is_active=True,
+            source_type="REPLAY"
         ),
 
         Camera(
@@ -29,7 +30,8 @@ def seed_cameras():
             road_name="Railway Road",
             direction="East",
             location="Railway Crossing",
-            is_active=True
+            is_active=True,
+            source_type="SIMULATED"
         ),
 
         Camera(
@@ -40,7 +42,8 @@ def seed_cameras():
             road_name="Bus Stand Road",
             direction="South",
             location="Bus Stand",
-            is_active=True
+            is_active=True,
+            source_type="SIMULATED"
         ),
 
         Camera(
@@ -51,7 +54,8 @@ def seed_cameras():
             road_name="University Road",
             direction="East",
             location="University Gate",
-            is_active=True
+            is_active=True,
+            source_type="SIMULATED"
         ),
 
         Camera(
@@ -62,7 +66,8 @@ def seed_cameras():
             road_name="City Center Road",
             direction="West",
             location="City Center",
-            is_active=True
+            is_active=True,
+            source_type="SIMULATED"
         ),
 
         Camera(
@@ -73,7 +78,8 @@ def seed_cameras():
             road_name="NH-9 Connector",
             direction="North",
             location="Highway Junction",
-            is_active=True
+            is_active=True,
+            source_type="SIMULATED"
         )
     ]
 

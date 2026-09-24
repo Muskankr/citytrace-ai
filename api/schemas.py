@@ -14,6 +14,7 @@ class CameraResponse(BaseModel):
     direction: str
     location: Optional[str] = None
     is_active: bool
+    source_type: str
 
     class Config:
         from_attributes = True

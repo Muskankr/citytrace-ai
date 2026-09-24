@@ -13,52 +13,18 @@ from src.ocr_correction import (
 
 PLATE_PATTERNS = [
 
-    # XX00XXX
-    # Example: EF10DZT
-    re.compile(
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{3}$"
-    ),
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{3}$",
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{2}$",
+    r"^[A-Z]{2}[0-9]{2}[A-Z][0-9]{1,4}$",
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{1,4}$",
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{3}[0-9]{1,4}$",
+    r"^[A-Z]{2}[0-9][A-Z][0-9]{1,4}$",
+    r"^[A-Z]{2}[0-9][A-Z]{2}[0-9]{1,4}$",
+    r"^[A-Z]{2}[0-9][A-Z]{3}[0-9]{1,4}$",
 
-    # XX00XX
-    # Example: HR26AB
-    re.compile(
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{2}$"
-    ),
-
-    # XX00X000
-    re.compile(
-        r"^[A-Z]{2}[0-9]{2}[A-Z][0-9]{1,4}$"
-    ),
-
-    # XX00XX000
-    re.compile(
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{1,4}$"
-    ),
-
-    # XX00XXX0000
-    re.compile(
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{3}[0-9]{1,4}$"
-    ),
-
-    # XX0X0000
-    re.compile(
-        r"^[A-Z]{2}[0-9][A-Z][0-9]{1,4}$"
-    ),
-
-    # XX0XX0000
-    re.compile(
-        r"^[A-Z]{2}[0-9][A-Z]{2}[0-9]{1,4}$"
-    ),
-
-    # XX00X0000
-    re.compile(
-        r"^[A-Z]{2}[0-9]{2}[A-Z][0-9]{1,4}$"
-    ),
-
-    # XX0XXX0000
-    re.compile(
-        r"^[A-Z]{2}[0-9][A-Z]{3}[0-9]{1,4}$"
-    ),
+    # Benchmark-observed structures
+    r"^[A-Z]{3}[0-9]{2}[A-Z]{2}$",
+    r"^[A-Z]{2}[0-9][A-Z]{4}$",
 ]
 
 
@@ -91,10 +57,19 @@ def is_possible_indian_plate(text):
     if not 6 <= len(text) <= 10:
         return False
 
-    return any(
-        pattern.fullmatch(text)
-        for pattern in PLATE_PATTERNS
-    )
+    for pattern in PLATE_PATTERNS:
+
+        # Support both compiled regex patterns
+        # and normal string patterns.
+        if hasattr(pattern, "fullmatch"):
+            matched = pattern.fullmatch(text)
+        else:
+            matched = re.fullmatch(pattern, text)
+
+        if matched:
+            return True
+
+    return False
 
 
 # ============================================================

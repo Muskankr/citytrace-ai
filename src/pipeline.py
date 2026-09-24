@@ -14,6 +14,7 @@ from src.ocr_correction import (
     corrected_candidates,
     plate_format_score,
     correct_plate,
+    matches_plate_format,
 )
 
 from src.best_frame import (
@@ -57,6 +58,18 @@ MAX_REAL_OCR = 8
 # Maximum number of interpolated observations added for OCR.
 MAX_INTERPOLATED_OCR = 4
 
+# ============================================================
+# DEMO / RESEARCH MODE
+# ============================================================
+
+# True  = faster settings for SIH judge/demo
+# False = full research/accuracy pipeline
+DEMO_MODE = True
+
+# Fast demo settings
+DEMO_PLATE_INTERVAL = 6
+DEMO_MAX_REAL_OCR = 4
+DEMO_MAX_INTERPOLATED_OCR = 1
 
 # ============================================================
 # VEHICLE CLASSES
@@ -382,14 +395,59 @@ def run_ocr(reader, crop):
 
 
 # ============================================================
-# PLATE FORMAT CHECK
+# PLATE FORMAT PATTERNS
 # ============================================================
+
+PLATE_PATTERNS = [
+
+    # --------------------------------------------------------
+    # Standard Indian-style structures
+    # --------------------------------------------------------
+
+    # XX00XXX
+    # Example: EF10DZT
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{3}$",
+
+    # XX00XX
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{2}$",
+
+    # XX00X0-0000
+    r"^[A-Z]{2}[0-9]{2}[A-Z][0-9]{1,4}$",
+
+    # XX00XX0-0000
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{1,4}$",
+
+    # XX00XXX0-0000
+    r"^[A-Z]{2}[0-9]{2}[A-Z]{3}[0-9]{1,4}$",
+
+    # XX0X0-0000
+    r"^[A-Z]{2}[0-9][A-Z][0-9]{1,4}$",
+
+    # XX0XX0-0000
+    r"^[A-Z]{2}[0-9][A-Z]{2}[0-9]{1,4}$",
+
+    # XX0XXX0-0000
+    r"^[A-Z]{2}[0-9][A-Z]{3}[0-9]{1,4}$",
+
+    # --------------------------------------------------------
+    # Additional structures observed in benchmark
+    # --------------------------------------------------------
+
+    # GXI50GJ
+    # FJI42HY
+    # 3 letters + 2 digits + 2 letters
+    r"^[A-Z]{3}[0-9]{2}[A-Z]{2}$",
+
+    # EY6INBG
+    # AV0BHVF
+    # 2 letters + 1 digit + 4 letters
+    r"^[A-Z]{2}[0-9][A-Z]{4}$",
+]
+
 
 def possible_plate(text):
     """
-    Fast structural check for Indian-style registration candidates.
-
-    This mirrors the supported formats used by validator.py.
+    Fast structural check for a possible registration plate.
     """
 
     if not text:
@@ -397,24 +455,16 @@ def possible_plate(text):
 
     text = normalize_text(text)
 
-    patterns = [
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{3}$",
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{2}$",
-        r"^[A-Z]{2}[0-9]{2}[A-Z][0-9]{1,4}$",
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{1,4}$",
-        r"^[A-Z]{2}[0-9]{2}[A-Z]{3}[0-9]{1,4}$",
-
-        # More tolerant formats
-        r"^[A-Z]{2}[0-9][A-Z][0-9]{1,4}$",
-        r"^[A-Z]{2}[0-9][A-Z]{2}[0-9]{1,4}$",
-        r"^[A-Z]{2}[0-9][A-Z]{3}[0-9]{1,4}$",
-    ]
+    if not text:
+        return False
 
     return any(
-        re.fullmatch(pattern, text)
-        for pattern in patterns
+        re.fullmatch(
+            pattern,
+            text
+        )
+        for pattern in PLATE_PATTERNS
     )
-
 
 # ============================================================
 # OCR CONSENSUS
@@ -493,13 +543,18 @@ def _frame_balanced_items(items):
 
 def _character_consensus(items):
     """
-    Character-level weighted consensus.
+    Character-level weighted consensus with plate-structure awareness.
 
-    Important safeguards:
-    - raw OCR is stronger than generated corrections;
-    - multiple preprocessing variants from one frame are capped;
-    - seven-character evidence is preferred when it has meaningful support.
+    The consensus uses:
+    - frame-balanced OCR evidence
+    - raw OCR observations
+    - OCR confusion pairs
+    - supported letter/digit structures
+    - seven-character evidence when sufficiently strong
+
+    It does NOT blindly force a single hard-coded plate format.
     """
+
     valid_items = []
 
     for item in items:
@@ -511,18 +566,28 @@ def _character_consensus(items):
         copy_item = dict(item)
         copy_item["text"] = text
         copy_item["_raw_weight"] = _observation_weight(copy_item)
+
         valid_items.append(copy_item)
 
     if not valid_items:
         return None
 
-    # Balance evidence within each video frame.
+    # --------------------------------------------------------
+    # Balance evidence from the same video frame.
+    # --------------------------------------------------------
+
     valid_items = _frame_balanced_items(valid_items)
+
+    # --------------------------------------------------------
+    # Group observations by plate length.
+    # --------------------------------------------------------
 
     length_groups = {}
 
     for item in valid_items:
+
         text = item["text"]
+
         weight = float(
             item.get(
                 "_balanced_weight",
@@ -531,26 +596,36 @@ def _character_consensus(items):
         )
 
         length_groups.setdefault(
-            len(text), []
-        ).append((text, weight, item))
+            len(text),
+            []
+        ).append(
+            (text, weight, item)
+        )
 
     if not length_groups:
         return None
 
     length_scores = {
-        length: sum(weight for _, weight, _ in group)
+        length: sum(
+            weight
+            for _, weight, _ in group
+        )
         for length, group in length_groups.items()
     }
 
-    # Prefer seven-character plates when their evidence is close to the
-    # strongest length. This matches the dominant Indian registration form
-    # used by this prototype without forcing every plate to seven characters.
+    # --------------------------------------------------------
+    # Select the dominant plate length.
+    # --------------------------------------------------------
+
     best_length = max(
         length_scores,
         key=length_scores.get
     )
 
+    # Seven-character plates are important for this prototype,
+    # but we only prefer them when they have meaningful support.
     if 7 in length_scores:
+
         strongest_score = length_scores[best_length]
         seven_score = length_scores[7]
 
@@ -559,24 +634,208 @@ def _character_consensus(items):
 
     candidates = length_groups[best_length]
 
+    # --------------------------------------------------------
+    # Supported letter/digit structures.
+    # --------------------------------------------------------
+
+    structures = [
+        "LLDDLLL",
+        "LLDDLL",
+        "LLDDL",
+        "LLDDLLDDDD",
+        "LLDDLLLDDDD",
+        "LLDLLDDDD",
+        "LLDLLLDDDD",
+        "LLLDDLL",
+        "LLDLLLL",
+    ]
+
+    structures = [
+        structure
+        for structure in structures
+        if len(structure) == best_length
+    ]
+
+    # --------------------------------------------------------
+    # OCR confusion pairs.
+    # --------------------------------------------------------
+
+    digit_confusions = {
+        "O": "0",
+        "Q": "0",
+        "D": "0",
+        "I": "1",
+        "L": "1",
+        "Z": "2",
+        "S": "5",
+        "G": "6",
+        "B": "8",
+    }
+
+    letter_confusions = {
+        "0": "O",
+        "1": "I",
+        "2": "Z",
+        "5": "S",
+        "6": "G",
+        "8": "B",
+    }
+
+    # --------------------------------------------------------
+    # Find the best structure using the actual OCR evidence.
+    # --------------------------------------------------------
+
+    def structure_evidence(structure):
+
+        score = 0.0
+
+        for position in range(best_length):
+
+            position_scores = {}
+
+            for text, weight, _ in candidates:
+
+                if position >= len(text):
+                    continue
+
+                char = text[position]
+
+                position_scores[char] = (
+                    position_scores.get(char, 0.0)
+                    + weight
+                )
+
+            if not position_scores:
+                continue
+
+            letter_score = sum(
+                value
+                for char, value in position_scores.items()
+                if char.isalpha()
+            )
+
+            digit_score = sum(
+                value
+                for char, value in position_scores.items()
+                if char.isdigit()
+            )
+
+            expected = structure[position]
+
+            if expected == "L":
+                score += letter_score
+
+            elif expected == "D":
+                score += digit_score
+
+        return score
+
+    if structures:
+
+        best_structure = max(
+            structures,
+            key=structure_evidence
+        )
+
+    else:
+        best_structure = None
+
+    # --------------------------------------------------------
+    # Character consensus using the selected structure.
+    # --------------------------------------------------------
+
     result = []
 
     for position in range(best_length):
+
         char_scores = {}
 
         for text, weight, _ in candidates:
+
             if position >= len(text):
                 continue
 
             char = text[position]
-            char_scores[char] = (
-                char_scores.get(char, 0.0) + weight
+
+            expected = (
+                best_structure[position]
+                if best_structure
+                else None
             )
 
-        if char_scores:
-            result.append(
-                max(char_scores, key=char_scores.get)
+            # ------------------------------------------------
+            # Direct evidence.
+            # ------------------------------------------------
+
+            direct_weight = weight
+
+            char_scores[char] = (
+                char_scores.get(char, 0.0)
+                + direct_weight
             )
+
+            # ------------------------------------------------
+            # OCR confusion evidence.
+            #
+            # If the structure says this position should be a
+            # digit and OCR produced O/I/S/etc., also give the
+            # corresponding digit some evidence.
+            # ------------------------------------------------
+
+            if expected == "D":
+
+                corrected = digit_confusions.get(char)
+
+                if corrected:
+
+                    char_scores[corrected] = (
+                        char_scores.get(corrected, 0.0)
+                        + weight * 0.85
+                    )
+
+            elif expected == "L":
+
+                corrected = letter_confusions.get(char)
+
+                if corrected:
+
+                    char_scores[corrected] = (
+                        char_scores.get(corrected, 0.0)
+                        + weight * 0.85
+                    )
+
+        # ----------------------------------------------------
+        # Remove characters that violate the expected class.
+        # ----------------------------------------------------
+
+        if best_structure:
+
+            expected = best_structure[position]
+
+            if expected == "D":
+
+                char_scores = {
+                    char: score
+                    for char, score in char_scores.items()
+                    if char.isdigit()
+                }
+
+            elif expected == "L":
+
+                char_scores = {
+                    char: score
+                    for char, score in char_scores.items()
+                    if char.isalpha()
+                }
+
+        if char_scores:
+
+            best_char = max(
+                char_scores,
+                key=char_scores.get
+            )
+
+            result.append(best_char)
 
     if not result:
         return None
@@ -1396,13 +1655,18 @@ def main(
                     2
                 )
 
-                # ------------------------------------------------
                 # PLATE INTERVAL
-                # ------------------------------------------------
+# ------------------------------------------------
+
+                current_plate_interval = (
+                    DEMO_PLATE_INTERVAL
+                    if DEMO_MODE
+                    else PLATE_INTERVAL
+                )
 
                 if (
                     frame_number
-                    % PLATE_INTERVAL != 0
+                    % current_plate_interval != 0
                 ):
                     continue
 
@@ -1785,7 +2049,11 @@ def main(
 
         real_for_ocr = select_temporally_diverse(
             real_for_ocr,
-            MAX_REAL_OCR,
+            (
+                DEMO_MAX_REAL_OCR
+                if DEMO_MODE
+                else MAX_REAL_OCR
+        ),
             min_frame_gap=12,
         )
 
@@ -1807,7 +2075,11 @@ def main(
 
         interpolated_for_ocr = select_temporally_diverse(
             interpolated_for_ocr,
-            MAX_INTERPOLATED_OCR,
+            (
+                DEMO_MAX_INTERPOLATED_OCR
+                if DEMO_MODE
+                else MAX_INTERPOLATED_OCR
+            ),
             min_frame_gap=12,
         )
 

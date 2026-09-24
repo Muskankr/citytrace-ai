@@ -492,12 +492,12 @@ export default function AlertsPage() {
 
           <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
 
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-2xl text-green-600">
-              ✓
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-2xl text-gray-500">
+              🔎
             </div>
 
             <h2 className="mt-4 text-xl font-semibold text-gray-900">
-              No Alerts Found
+              No Matching Alerts
             </h2>
 
             <p className="mt-2 text-sm text-gray-500">

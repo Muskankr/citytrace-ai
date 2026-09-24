@@ -1,3 +1,10 @@
+# =========================================================
+# CITYTRACE AI - GITIGNORE
+# Local development files stay on the computer
+# but are not pushed to GitHub.
+# =========================================================
+
+
 # =========================
 # Python
 # =========================
@@ -9,11 +16,15 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 
+
+# =========================
 # Virtual environment
+# =========================
 venv/
 .venv/
 env/
 ENV/
+
 
 # =========================
 # Environment / Secrets
@@ -22,12 +33,14 @@ ENV/
 .env.*
 !.env.example
 
+
 # =========================
 # Database
 # =========================
 *.db
 *.sqlite
 *.sqlite3
+
 
 # =========================
 # IDE / OS
@@ -39,6 +52,7 @@ ENV/
 .DS_Store
 Thumbs.db
 
+
 # =========================
 # Next.js
 # =========================
@@ -46,19 +60,25 @@ dashboard/node_modules/
 dashboard/.next/
 dashboard/out/
 dashboard/.vercel/
+node_modules/
+.next/
+
 
 # =========================
 # Python generated files
 # =========================
 *.log
 
+
 # =========================
 # Generated outputs
 # =========================
+outputs/
 outputs/videos/
 outputs/plates/
 outputs/pipeline_plates/
 outputs/detections/
+
 
 # =========================
 # Input / large media
@@ -66,6 +86,7 @@ outputs/detections/
 data/videos/
 data/images/
 data/plates/
+
 
 # =========================
 # Model weights
@@ -75,8 +96,67 @@ data/plates/
 *.pth
 *.weights
 
+
 # =========================
 # Temporary files
 # =========================
 *.tmp
 *.temp
+*.bak
+
+
+# =========================
+# Benchmark / debug output
+# =========================
+ranking_debug.txt
+
+v7_output.txt
+v7_scoring_block.txt
+
+v71_output.txt
+v71_baseline.txt
+v71_frame_output.txt
+v71_confusion20.txt
+v71_similarity55.txt
+v71_temporal_run.txt
+
+
+# =========================
+# OCR / benchmark debugging scripts
+# =========================
+src/analyze_character_positions.py
+src/analyze_failed_tracks.py
+src/analyze_remaining_failures.py
+
+src/debug_v71_ranking.py
+src/debug_v7_failures.py
+src/diagnose_v8.py
+src/inspect_ocr_evidence.py
+
+src/test_candidate_hypotheses_v7.py
+src/test_candidate_hypotheses_v71.py
+src/test_candidate_hypotheses_v71_100pct.py
+src/test_candidate_hypotheses_v7_75pct.py
+
+src/test_candidate_scoring.py
+src/test_candidate_scoring_v4.py
+src/test_candidate_scoring_v5.py
+
+src/test_character_consensus_v6.py
+src/test_frame_consensus.py
+
+src/test_github_plate_model.py
+src/pipeline_backup.py
+
+
+# =========================
+# Recovery / temporary patch
+# =========================
+*.patch
+
+
+# =========================
+# Local AI/editor instruction files
+# =========================
+AGENTS.md
+CLAUDE.md

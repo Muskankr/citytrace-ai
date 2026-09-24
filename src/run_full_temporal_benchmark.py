@@ -2,7 +2,7 @@ import os
 import csv
 import cv2
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from ultralytics import YOLO
 from rapidocr import RapidOCR
@@ -24,28 +24,28 @@ GROUND_TRUTH = "data/benchmark/ground_truth.csv"
 
 OUTPUT_CSV = "data/benchmark/full_temporal_results.csv"
 
+# NEW:
+# Stores every OCR observation so we can inspect what RapidOCR
+# actually saw before consensus.
+OBSERVATION_CSV = (
+    "data/benchmark/ocr_observations.csv"
+)
+
 VEHICLE_CONF = 0.40
 PLATE_CONF = 0.20
 
+# ByteTrack runs on EVERY frame.
+# Plate detection + OCR runs every Nth frame.
 PROCESS_EVERY_N_FRAMES = 4
 
 MIN_VEHICLE_WIDTH = 80
 MIN_VEHICLE_HEIGHT = 50
 
-# Only benchmark vehicles for which we have ground truth.
-TARGET_TRACKS = {
-    1,
-    5,
-    7,
-    25,
-    28,
-    35,
-    54,
-    64,
-    67,
-    73,
-    86,
-    95,
+VEHICLE_CLASSES = {
+    2,  # car
+    3,  # motorcycle
+    5,  # bus
+    7,  # truck
 }
 
 
@@ -67,7 +67,9 @@ def load_ground_truth():
 
         for row in reader:
 
-            track_id = int(row["track_id"])
+            track_id = int(
+                row["track_id"]
+            )
 
             actual = normalize_plate(
                 row["actual_plate"]
@@ -79,7 +81,7 @@ def load_ground_truth():
 
 
 # ============================================================
-# DISTANCE
+# LEVENSHTEIN DISTANCE
 # ============================================================
 
 def levenshtein_distance(a, b):
@@ -93,16 +95,29 @@ def levenshtein_distance(a, b):
     if not b:
         return len(a)
 
-    previous = list(range(len(b) + 1))
+    previous = list(
+        range(len(b) + 1)
+    )
 
-    for i, char_a in enumerate(a, start=1):
+    for i, char_a in enumerate(
+        a,
+        start=1
+    ):
 
         current = [i]
 
-        for j, char_b in enumerate(b, start=1):
+        for j, char_b in enumerate(
+            b,
+            start=1
+        ):
 
-            insertion = current[j - 1] + 1
-            deletion = previous[j] + 1
+            insertion = (
+                current[j - 1] + 1
+            )
+
+            deletion = (
+                previous[j] + 1
+            )
 
             substitution = (
                 previous[j - 1]
@@ -122,7 +137,14 @@ def levenshtein_distance(a, b):
     return previous[-1]
 
 
-def character_accuracy(actual, predicted):
+# ============================================================
+# CHARACTER ACCURACY
+# ============================================================
+
+def character_accuracy(
+    actual,
+    predicted
+):
 
     if not actual or not predicted:
         return 0.0
@@ -136,7 +158,10 @@ def character_accuracy(actual, predicted):
         0.0,
         1.0 - (
             distance
-            / max(len(actual), len(predicted))
+            / max(
+                len(actual),
+                len(predicted)
+            )
         )
     )
 
@@ -162,7 +187,10 @@ def detect_plate(
         verbose=False
     )[0]
 
-    if result.boxes is None:
+    if (
+        result.boxes is None
+        or len(result.boxes) == 0
+    ):
         return None
 
     best = None
@@ -186,13 +214,30 @@ def detect_plate(
             vehicle_crop.shape[:2]
         )
 
-        x1 = max(0, min(x1, width - 1))
-        x2 = max(0, min(x2, width))
+        x1 = max(
+            0,
+            min(x1, width - 1)
+        )
 
-        y1 = max(0, min(y1, height - 1))
-        y2 = max(0, min(y2, height))
+        x2 = max(
+            0,
+            min(x2, width)
+        )
 
-        if x2 <= x1 or y2 <= y1:
+        y1 = max(
+            0,
+            min(y1, height - 1)
+        )
+
+        y2 = max(
+            0,
+            min(y2, height)
+        )
+
+        if (
+            x2 <= x1
+            or y2 <= y1
+        ):
             continue
 
         crop = vehicle_crop[
@@ -209,7 +254,299 @@ def detect_plate(
     if best is None:
         return None
 
-    return best, best_confidence
+    return (
+        best,
+        best_confidence
+    )
+
+
+# ============================================================
+# SAVE OCR OBSERVATIONS
+# ============================================================
+
+def save_ocr_observations(
+    observations,
+    ground_truth
+):
+
+    os.makedirs(
+        os.path.dirname(
+            OBSERVATION_CSV
+        ),
+        exist_ok=True
+    )
+
+    rows = []
+
+    for track_id in sorted(
+        ground_truth
+    ):
+
+        actual = ground_truth[
+            track_id
+        ]
+
+        for index, item in enumerate(
+            observations.get(
+                track_id,
+                []
+            ),
+            start=1
+        ):
+
+            rows.append(
+                {
+                    "track_id":
+                        track_id,
+
+                    "actual_plate":
+                        actual,
+
+                    "observation_index":
+                        index,
+
+                    "frame":
+                        item.get(
+                            "frame",
+                            ""
+                        ),
+
+                    "text":
+                        item.get(
+                            "text",
+                            ""
+                        ),
+
+                    "confidence":
+                        round(
+                            float(
+                                item.get(
+                                    "confidence",
+                                    0.0
+                                )
+                            ),
+                            4
+                        ),
+
+                    "quality":
+                        round(
+                            float(
+                                item.get(
+                                    "quality",
+                                    0.0
+                                )
+                            ),
+                            4
+                        ),
+
+                    "sharpness":
+                        round(
+                            float(
+                                item.get(
+                                    "sharpness",
+                                    0.0
+                                )
+                            ),
+                            4
+                        ),
+
+                    "plate_confidence":
+                        round(
+                            float(
+                                item.get(
+                                    "plate_confidence",
+                                    0.0
+                                )
+                            ),
+                            4
+                        ),
+
+                    "resolution":
+                        item.get(
+                            "resolution",
+                            0
+                        ),
+
+                    "method":
+                        item.get(
+                            "method",
+                            ""
+                        ),
+
+                    "candidate_source":
+                        item.get(
+                            "candidate_source",
+                            "raw"
+                        ),
+
+                    "interpolated":
+                        item.get(
+                            "interpolated",
+                            False
+                        )
+                }
+            )
+
+    fieldnames = [
+        "track_id",
+        "actual_plate",
+        "observation_index",
+        "frame",
+        "text",
+        "confidence",
+        "quality",
+        "sharpness",
+        "plate_confidence",
+        "resolution",
+        "method",
+        "candidate_source",
+        "interpolated"
+    ]
+
+    with open(
+        OBSERVATION_CSV,
+        "w",
+        newline="",
+        encoding="utf-8"
+    ) as file:
+
+        writer = csv.DictWriter(
+            file,
+            fieldnames=fieldnames
+        )
+
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return len(rows)
+
+
+# ============================================================
+# PRINT OCR DIAGNOSTICS
+# ============================================================
+
+def print_ocr_diagnostics(
+    observations,
+    ground_truth
+):
+
+    print()
+    print("=" * 75)
+    print("OCR EVIDENCE DIAGNOSTICS")
+    print("=" * 75)
+
+    for track_id in sorted(
+        ground_truth
+    ):
+
+        actual = ground_truth[
+            track_id
+        ]
+
+        items = observations.get(
+            track_id,
+            []
+        )
+
+        if not items:
+            print()
+            print(
+                f"Track {track_id}: "
+                f"NO OCR OBSERVATIONS"
+            )
+            continue
+
+        counter = Counter()
+
+        for item in items:
+
+            text = normalize_plate(
+                item.get(
+                    "text",
+                    ""
+                )
+            )
+
+            if text:
+                counter[text] += 1
+
+        print()
+        print(
+            f"Track {track_id} "
+            f"(actual: {actual})"
+        )
+
+        print(
+            f"  Total observations : "
+            f"{len(items)}"
+        )
+
+        print(
+            "  Most common OCR outputs:"
+        )
+
+        for text, count in counter.most_common(10):
+
+            print(
+                f"    {text:<15} "
+                f"{count:>4} observations"
+            )
+
+        # ----------------------------------------------------
+        # Check whether the actual plate appeared at all.
+        # ----------------------------------------------------
+
+        actual_count = counter.get(
+            actual,
+            0
+        )
+
+        print(
+            f"  Exact actual plate "
+            f"appeared : "
+            f"{actual_count} times"
+        )
+
+        # ----------------------------------------------------
+        # Show observations that differ from actual by only
+        # one character.
+        # ----------------------------------------------------
+
+        near_matches = []
+
+        for text, count in counter.items():
+
+            distance = levenshtein_distance(
+                actual,
+                text
+            )
+
+            if distance == 1:
+
+                near_matches.append(
+                    (text, count)
+                )
+
+        near_matches.sort(
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        if near_matches:
+
+            print(
+                "  One-character variants:"
+            )
+
+            for text, count in near_matches[:10]:
+
+                print(
+                    f"    {text:<15} "
+                    f"{count:>4} observations"
+                )
+
+    print()
+    print("=" * 75)
 
 
 # ============================================================
@@ -224,6 +561,10 @@ def main():
     print("=" * 75)
     print()
 
+    # --------------------------------------------------------
+    # Load ground truth
+    # --------------------------------------------------------
+
     ground_truth = load_ground_truth()
 
     print(
@@ -233,20 +574,42 @@ def main():
 
     print(
         f"Target tracks         : "
-        f"{sorted(TARGET_TRACKS)}"
+        f"{sorted(ground_truth.keys())}"
     )
 
     print()
 
+    # --------------------------------------------------------
+    # Load models
+    # --------------------------------------------------------
+
+    print(
+        "Loading vehicle detector..."
+    )
+
     vehicle_model = YOLO(
         VEHICLE_MODEL
+    )
+
+    print(
+        "Loading license plate detector..."
     )
 
     plate_model = YOLO(
         PLATE_MODEL
     )
 
+    print(
+        "Loading RapidOCR..."
+    )
+
     reader = RapidOCR()
+
+    print()
+
+    # --------------------------------------------------------
+    # Open video
+    # --------------------------------------------------------
 
     cap = cv2.VideoCapture(
         VIDEO_PATH
@@ -282,12 +645,21 @@ def main():
     print()
 
     # --------------------------------------------------------
-    # observations[track_id] = list of OCR observations
+    # observations[track_id] =
+    # list of OCR observations
     # --------------------------------------------------------
 
     observations = defaultdict(list)
 
+    track_seen_frames = defaultdict(int)
+
+    track_plate_detections = defaultdict(int)
+
     frame_number = 0
+
+    # ========================================================
+    # VIDEO LOOP
+    # ========================================================
 
     while True:
 
@@ -298,15 +670,8 @@ def main():
 
         frame_number += 1
 
-        if (
-            frame_number
-            % PROCESS_EVERY_N_FRAMES
-            != 0
-        ):
-            continue
-
         # ----------------------------------------------------
-        # Vehicle tracking
+        # ByteTrack EVERY frame
         # ----------------------------------------------------
 
         results = vehicle_model.track(
@@ -351,25 +716,54 @@ def main():
             .tolist()
         )
 
-        for track_id, class_id, box in zip(
+        # ----------------------------------------------------
+        # Count target vehicles whenever seen
+        # ----------------------------------------------------
+
+        for track_id in track_ids:
+
+            if track_id in ground_truth:
+
+                track_seen_frames[
+                    track_id
+                ] += 1
+
+        # ----------------------------------------------------
+        # Plate + OCR every N frames
+        # ----------------------------------------------------
+
+        if (
+            frame_number
+            % PROCESS_EVERY_N_FRAMES
+            != 0
+        ):
+            continue
+
+        # ====================================================
+        # PLATE + OCR
+        # ====================================================
+
+        for (
+            track_id,
+            class_id,
+            box
+        ) in zip(
             track_ids,
             classes,
             xyxy
         ):
 
-            if track_id not in TARGET_TRACKS:
-                continue
-
             if track_id not in ground_truth:
                 continue
 
-            # COCO vehicle classes
-            if class_id not in {
-                2, 3, 5, 7
-            }:
+            if class_id not in VEHICLE_CLASSES:
                 continue
 
             x1, y1, x2, y2 = box
+
+            # ------------------------------------------------
+            # Clamp coordinates
+            # ------------------------------------------------
 
             x1 = max(
                 0,
@@ -405,6 +799,10 @@ def main():
                 x1:x2
             ]
 
+            # ------------------------------------------------
+            # Detect plate
+            # ------------------------------------------------
+
             detected = detect_plate(
                 plate_model,
                 vehicle_crop
@@ -416,6 +814,10 @@ def main():
             plate_crop, plate_confidence = (
                 detected
             )
+
+            track_plate_detections[
+                track_id
+            ] += 1
 
             # ------------------------------------------------
             # OCR
@@ -434,24 +836,37 @@ def main():
                 []
             )
 
+            # ------------------------------------------------
+            # Fallback
+            # ------------------------------------------------
+
             if not candidates:
 
                 candidates = [
                     {
-                        "text": ocr_result.get(
-                            "text",
-                            ""
-                        ),
+                        "text":
+                            ocr_result.get(
+                                "text",
+                                ""
+                            ),
+
                         "confidence":
                             ocr_result.get(
                                 "confidence",
                                 0.0
                             ),
+
                         "method":
                             ocr_result.get(
                                 "method",
                                 "unknown"
-                            )
+                            ),
+
+                        "candidate_source":
+                            "raw",
+
+                        "interpolated":
+                            False
                     }
                 ]
 
@@ -463,6 +878,10 @@ def main():
                 crop_width
                 * crop_height
             )
+
+            # ------------------------------------------------
+            # Preserve ALL useful candidate metadata.
+            # ------------------------------------------------
 
             for candidate in candidates:
 
@@ -483,22 +902,83 @@ def main():
                     )
                 )
 
+                # Preserve pipeline quality if supplied.
+                # Otherwise retain the previous benchmark value.
+                quality = float(
+                    candidate.get(
+                        "quality",
+                        0.8
+                    )
+                )
+
+                sharpness = float(
+                    candidate.get(
+                        "sharpness",
+                        1.0
+                    )
+                )
+
+                method = candidate.get(
+                    "method",
+                    ocr_result.get(
+                        "method",
+                        "unknown"
+                    )
+                )
+
+                candidate_source = (
+                    candidate.get(
+                        "candidate_source",
+                        "raw"
+                    )
+                )
+
+                interpolated = bool(
+                    candidate.get(
+                        "interpolated",
+                        False
+                    )
+                )
+
                 observations[
                     track_id
                 ].append(
                     {
-                        "text": text,
-                        "confidence": confidence,
-                        "quality": 0.8,
-                        "sharpness": 1.0,
-                        "frame": frame_number,
+                        "text":
+                            text,
+
+                        "confidence":
+                            confidence,
+
+                        "quality":
+                            quality,
+
+                        "sharpness":
+                            sharpness,
+
+                        "frame":
+                            frame_number,
+
                         "plate_confidence":
                             plate_confidence,
+
                         "resolution":
                             resolution,
-                        "interpolated": False
+
+                        "method":
+                            method,
+
+                        "candidate_source":
+                            candidate_source,
+
+                        "interpolated":
+                            interpolated
                     }
                 )
+
+        # ----------------------------------------------------
+        # Progress
+        # ----------------------------------------------------
 
         if frame_number % 300 == 0:
 
@@ -510,6 +990,10 @@ def main():
 
     cap.release()
 
+    # ========================================================
+    # OCR COLLECTION COMPLETE
+    # ========================================================
+
     print()
     print("=" * 75)
     print("OCR COLLECTION COMPLETE")
@@ -517,7 +1001,36 @@ def main():
     print()
 
     # ========================================================
-    # FINAL CONSENSUS
+    # SAVE RAW OCR EVIDENCE
+    # ========================================================
+
+    observation_count = (
+        save_ocr_observations(
+            observations,
+            ground_truth
+        )
+    )
+
+    print(
+        f"Saved {observation_count} "
+        f"OCR observations to:"
+    )
+
+    print(
+        f"  {OBSERVATION_CSV}"
+    )
+
+    # ========================================================
+    # PRINT DIAGNOSTICS
+    # ========================================================
+
+    print_ocr_diagnostics(
+        observations,
+        ground_truth
+    )
+
+    # ========================================================
+    # OUTPUT DIRECTORY
     # ========================================================
 
     os.makedirs(
@@ -535,6 +1048,10 @@ def main():
     character_scores = []
     edit_distances = []
 
+    # ========================================================
+    # FINAL CONSENSUS
+    # ========================================================
+
     for track_id in sorted(
         ground_truth
     ):
@@ -543,9 +1060,25 @@ def main():
             track_id
         ]
 
-        track_observations = observations.get(
-            track_id,
-            []
+        track_observations = (
+            observations.get(
+                track_id,
+                []
+            )
+        )
+
+        seen_frames = (
+            track_seen_frames.get(
+                track_id,
+                0
+            )
+        )
+
+        plate_detections = (
+            track_plate_detections.get(
+                track_id,
+                0
+            )
         )
 
         print(
@@ -553,6 +1086,20 @@ def main():
             f"{len(track_observations)} "
             f"OCR observations"
         )
+
+        print(
+            f"  Track frames : "
+            f"{seen_frames}"
+        )
+
+        print(
+            f"  Plate detections : "
+            f"{plate_detections}"
+        )
+
+        # ----------------------------------------------------
+        # Consensus
+        # ----------------------------------------------------
 
         if not track_observations:
 
@@ -596,6 +1143,10 @@ def main():
 
                 consensus_confidence = 0.0
                 consensus_count = 0
+
+        # ----------------------------------------------------
+        # Metrics
+        # ----------------------------------------------------
 
         distance = levenshtein_distance(
             actual,
@@ -665,25 +1216,46 @@ def main():
 
         rows.append(
             {
-                "track_id": track_id,
-                "actual_plate": actual,
-                "predicted_plate": predicted,
-                "exact_match": exact,
+                "track_id":
+                    track_id,
+
+                "actual_plate":
+                    actual,
+
+                "predicted_plate":
+                    predicted,
+
+                "exact_match":
+                    exact,
+
                 "character_accuracy":
                     round(
                         char_accuracy,
                         4
                     ),
-                "edit_distance": distance,
+
+                "edit_distance":
+                    distance,
+
                 "ocr_confidence":
                     round(
                         consensus_confidence,
                         4
                     ),
+
                 "observation_count":
-                    len(track_observations),
+                    len(
+                        track_observations
+                    ),
+
                 "consensus_count":
-                    consensus_count
+                    consensus_count,
+
+                "track_frames":
+                    seen_frames,
+
+                "plate_detections":
+                    plate_detections
             }
         )
 
@@ -709,12 +1281,13 @@ def main():
                 "edit_distance",
                 "ocr_confidence",
                 "observation_count",
-                "consensus_count"
+                "consensus_count",
+                "track_frames",
+                "plate_detections"
             ]
         )
 
         writer.writeheader()
-
         writer.writerows(rows)
 
     # ========================================================
@@ -743,62 +1316,150 @@ def main():
         / len(edit_distances)
     )
 
+    # --------------------------------------------------------
+    # Coverage
+    # --------------------------------------------------------
+
+    tracked_count = sum(
+        1
+        for track_id in ground_truth
+        if track_seen_frames.get(
+            track_id,
+            0
+        ) > 0
+    )
+
+    plate_detected_count = sum(
+        1
+        for track_id in ground_truth
+        if track_plate_detections.get(
+            track_id,
+            0
+        ) > 0
+    )
+
+    readable_count = sum(
+        1
+        for track_id in ground_truth
+        if len(
+            observations.get(
+                track_id,
+                []
+            )
+        ) > 0
+    )
+
+    tracking_coverage = (
+        tracked_count / total
+        if total
+        else 0.0
+    )
+
+    plate_detection_coverage = (
+        plate_detected_count / total
+        if total
+        else 0.0
+    )
+
+    readable_coverage = (
+        readable_count / total
+        if total
+        else 0.0
+    )
+
+    # ========================================================
+    # FINAL REPORT
+    # ========================================================
+
     print("=" * 75)
     print("FINAL TEMPORAL BENCHMARK")
     print("=" * 75)
 
     print(
-        f"Samples tested          : "
+        f"Samples tested              : "
         f"{total}"
     )
 
     print(
-        f"Exact recognitions      : "
+        f"Vehicles tracked            : "
+        f"{tracked_count}/{total} "
+        f"({tracking_coverage:.1%})"
+    )
+
+    print(
+        f"Vehicles with plate detect  : "
+        f"{plate_detected_count}/{total} "
+        f"({plate_detection_coverage:.1%})"
+    )
+
+    print(
+        f"Vehicles with OCR evidence  : "
+        f"{readable_count}/{total} "
+        f"({readable_coverage:.1%})"
+    )
+
+    print(
+        f"Exact recognitions          : "
         f"{exact_matches}/{total}"
     )
 
     print(
-        f"Exact plate accuracy    : "
+        f"Exact plate accuracy        : "
         f"{exact_accuracy:.1%}"
     )
 
     print(
-        f"Character accuracy      : "
+        f"Character accuracy          : "
         f"{average_character_accuracy:.1%}"
     )
 
     print(
-        f"Average edit distance   : "
+        f"Average edit distance       : "
         f"{average_edit_distance:.2f}"
     )
 
     print()
 
     print(
-        f"Results saved to        : "
+        f"Results saved to            : "
         f"{OUTPUT_CSV}"
+    )
+
+    print(
+        f"OCR evidence saved to      : "
+        f"{OBSERVATION_CSV}"
     )
 
     print("=" * 75)
 
     print()
+
     print(
         "IMPORTANT:"
     )
 
     print(
-        "This benchmark measures the "
-        "current implementation on the "
-        "available labeled video tracks."
+        "This benchmark measures the current "
+        "implementation on the available "
+        "labeled video tracks."
     )
 
     print(
-        "A >90% result should only be "
-        "claimed after sufficient labeled "
-        "samples and representative "
-        "conditions have been evaluated."
+        "Track IDs are generated by ByteTrack "
+        "during this benchmark run."
     )
 
+    print(
+        "A >90% result should only be claimed "
+        "after sufficient labeled samples and "
+        "representative conditions have been "
+        "evaluated."
+    )
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
     main()

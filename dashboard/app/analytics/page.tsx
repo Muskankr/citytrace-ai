@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getAnalytics, getODMatrix } from "@/lib/api";
 import ODMatrix from "@/components/ODMatrix";
+import TrafficCharts from "@/components/TrafficCharts";
 
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<any[]>([]);
@@ -39,37 +40,83 @@ export default function AnalyticsPage() {
     loadODMatrix();
   }, []);
 
-  const totalVehicles = analytics.reduce(
+  /*
+   * Keep only the latest analytics record for each camera.
+   *
+   * The backend may contain historical TrafficAnalytics
+   * records for the same camera. For the dashboard we want
+   * the current/latest state of each camera only.
+   */
+  const latestAnalytics = useMemo(() => {
+    const latestByCamera = new Map<string, any>();
+
+    for (const item of analytics) {
+      const cameraId = item.camera_id;
+
+      if (!cameraId) {
+        continue;
+      }
+
+      const existing = latestByCamera.get(cameraId);
+
+      if (!existing) {
+        latestByCamera.set(cameraId, item);
+        continue;
+      }
+
+      const existingTime = existing.timestamp
+        ? new Date(existing.timestamp).getTime()
+        : 0;
+
+      const currentTime = item.timestamp
+        ? new Date(item.timestamp).getTime()
+        : 0;
+
+      if (currentTime >= existingTime) {
+        latestByCamera.set(cameraId, item);
+      }
+    }
+
+    return Array.from(latestByCamera.values()).sort((a, b) =>
+      String(b.camera_id).localeCompare(String(a.camera_id))
+    );
+  }, [analytics]);
+
+  /*
+   * Overall statistics are calculated from the latest
+   * record of each camera, not historical duplicates.
+   */
+  const totalVehicles = latestAnalytics.reduce(
     (sum, item) => sum + (item.vehicle_count || 0),
     0
   );
 
-  const totalCars = analytics.reduce(
+  const totalCars = latestAnalytics.reduce(
     (sum, item) => sum + (item.car_count || 0),
     0
   );
 
-  const totalMotorcycles = analytics.reduce(
+  const totalMotorcycles = latestAnalytics.reduce(
     (sum, item) => sum + (item.motorcycle_count || 0),
     0
   );
 
-  const totalBuses = analytics.reduce(
+  const totalBuses = latestAnalytics.reduce(
     (sum, item) => sum + (item.bus_count || 0),
     0
   );
 
-  const totalTrucks = analytics.reduce(
+  const totalTrucks = latestAnalytics.reduce(
     (sum, item) => sum + (item.truck_count || 0),
     0
   );
 
   const averageDensity =
-    analytics.length > 0
-      ? analytics.reduce(
+    latestAnalytics.length > 0
+      ? latestAnalytics.reduce(
           (sum, item) => sum + (item.traffic_density || 0),
           0
-        ) / analytics.length
+        ) / latestAnalytics.length
       : 0;
 
   function getCongestionStyle(level: string) {
@@ -198,6 +245,12 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+
+            {/* Traffic Flow Trend */}
+      <div className="mt-8">
+        <TrafficCharts analytics={analytics} />
+      </div>
+
       {/* Origin-Destination Analytics */}
       <div className="mt-8">
 
@@ -228,7 +281,7 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-        ) : analytics.length === 0 ? (
+        ) : latestAnalytics.length === 0 ? (
 
           <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
             <p className="text-sm text-gray-500">
@@ -240,10 +293,10 @@ export default function AnalyticsPage() {
 
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
 
-            {analytics.map((item) => (
+            {latestAnalytics.map((item) => (
 
               <div
-                key={item.id}
+                key={item.camera_id}
                 className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md"
               >
 

@@ -20,12 +20,40 @@ import {
 } from "@/lib/api";
 
 export default function Home() {
+  const [latestProcessing, setLatestProcessing] =
+    useState<{
+      job_id: string;
+      camera_code: string;
+      filename: string;
+    } | null>(null);
   const [cameras, setCameras] = useState<any[]>([]);
   const [detections, setDetections] = useState<any[]>([]);
   const [trajectories, setTrajectories] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [heatmapData, setHeatmapData] = useState<any[]>([]);
+
+
+
+    useEffect(() => {
+    const stored =
+      sessionStorage.getItem(
+        "citytrace_latest_processing"
+      );
+
+    if (!stored) return;
+
+    try {
+      setLatestProcessing(
+        JSON.parse(stored)
+      );
+    } catch {
+      sessionStorage.removeItem(
+        "citytrace_latest_processing"
+      );
+    }
+  }, []);
+
 
   useEffect(() => {
     let mounted = true;
@@ -75,55 +103,47 @@ export default function Home() {
      DASHBOARD CALCULATIONS
   ========================= */
 
-  const activeCameras = cameras.filter(
-    (camera) => camera.is_active
-  ).length;
+  const configuredCameras = cameras.length;
 
-  /*
-   * Every detection returned by the API
-   * represents a recorded vehicle detection.
-   */
+const activeCameras = cameras.filter(
+  (camera) => camera.is_active
+).length;
+
+ 
   const totalVehicles = detections.length;
 
-  /*
-   * Count validated ANPR detection records.
-   */
+  
   const validPlates = detections.filter(
     (detection) => detection.plate_valid
   ).length;
 
-  /*
-   * Only unresolved alerts are active.
-   */
+
+const validatedPlateRecords = validPlates;
+
+const offlineBenchmark = {
+  exactMatches: 12,
+  totalSamples: 12,
+};
+
+const offlineBenchmarkRate =
+  (offlineBenchmark.exactMatches /
+    offlineBenchmark.totalSamples) *
+  100;
+
+ 
   const activeAlerts = alerts.filter(
     (alert) => !alert.is_resolved
   ).length;
 
-  /*
-   * Heatmap already represents monitored camera
-   * locations, so bottlenecks are counted from it.
-   */
+ 
   const bottlenecks = heatmapData.filter(
     (item) => item.bottleneck
   ).length;
 
-  /*
-   * Total tracked trajectories.
-   *
-   * We intentionally do NOT call this "active"
-   * because completed trajectories are still useful
-   * evidence of multi-camera tracking.
-   */
+ 
   const trackedTrajectories = trajectories.length;
 
-  /*
-   * ------------------------------------------------
-   * LATEST ANALYTICS RECORD PER CAMERA
-   * ------------------------------------------------
-   *
-   * Prevent duplicate CAM001/CAM002/CAM004 entries
-   * when multiple analytics snapshots exist.
-   */
+ 
   const latestByCamera = new Map<string, any>();
 
   analytics.forEach((item) => {
@@ -142,10 +162,7 @@ export default function Home() {
     )
   );
 
-  /*
-   * Average speed across the latest snapshot
-   * from each monitored camera.
-   */
+  
   const averageSpeed =
     latestAnalytics.length > 0
       ? latestAnalytics.reduce(
@@ -190,15 +207,15 @@ export default function Home() {
 
             <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
               <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-              LIVE
+              PROTOTYPE MONITORING
             </span>
 
           </div>
 
           <p className="mt-2 text-sm text-slate-500">
-            Real-time multi-camera ANPR, vehicle trajectory
-            tracking and urban traffic analytics.
-          </p>
+  Multi-camera ANPR, vehicle trajectory tracking,
+  GIS intelligence and urban traffic analytics.
+</p>
         </div>
 
         {/* =========================
@@ -207,6 +224,51 @@ export default function Home() {
 
         <DemoMode />
 
+                {latestProcessing && (
+          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+              <div className="flex items-start gap-3">
+
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
+                  ✓
+                </div>
+
+                <div>
+
+                  <p className="text-sm font-semibold text-green-800">
+                    Latest AI Processing Completed
+                  </p>
+
+                  <p className="mt-1 text-sm text-green-700">
+                    {latestProcessing.filename}
+                  </p>
+
+                  <p className="mt-1 text-xs text-green-600">
+                    Camera: {latestProcessing.camera_code}
+                  </p>
+
+                </div>
+
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+  sessionStorage.removeItem("citytrace_latest_processing");
+  setLatestProcessing(null);
+}}
+                className="text-xs font-medium text-green-700 hover:text-green-900"
+              >
+                Dismiss ×
+              </button>
+
+            </div>
+
+          </div>
+        )}
+
         {/* =========================
             MAIN STATISTICS
         ========================= */}
@@ -214,10 +276,10 @@ export default function Home() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
           <StatCard
-            title="Active Cameras"
-            value={activeCameras}
-            description="Connected city cameras"
-          />
+  title="Configured Cameras"
+  value={configuredCameras}
+  description="Camera nodes in prototype network"
+/>
 
           <StatCard
             title="Detection Records"
@@ -226,10 +288,10 @@ export default function Home() {
           />
 
           <StatCard
-            title="Valid ANPR Plates"
-            value={validPlates}
-            description="Validated ANPR detection records"
-          />
+  title="Validated Plate Records"
+  value={validPlates}
+  description="Records passing plate-format validation"
+/>
 
           <StatCard
             title="Active Alerts"
@@ -242,6 +304,119 @@ export default function Home() {
         {/* =========================
             INTELLIGENCE SUMMARY
         ========================= */}
+
+        {/* =========================
+    ANPR PERFORMANCE
+========================= */}
+
+<div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+    <div>
+      <h2 className="text-lg font-semibold text-black">
+        ANPR Intelligence
+      </h2>
+
+      <p className="mt-1 text-sm text-slate-500">
+        ANPR validation and offline recognition benchmark.
+      </p>
+    </div>
+
+    <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+  OFFLINE TEST SET
+</span>
+
+  </div>
+
+  <div className="mt-5 grid gap-4 sm:grid-cols-3">
+
+    {/* DETECTION COVERAGE */}
+
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        Vehicle Detections
+      </p>
+
+      <p className="mt-2 text-3xl font-bold text-slate-900">
+        {totalVehicles}
+      </p>
+
+      <p className="mt-2 text-xs text-slate-500">
+        Recorded vehicle observations in the current dataset.
+      </p>
+
+    </div>
+
+
+    {/* VALIDATED PLATES */}
+
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        Validated Plates
+      </p>
+
+      <p className="mt-2 text-3xl font-bold text-green-600">
+        {validatedPlateRecords}
+      </p>
+
+      <p className="mt-2 text-xs text-slate-500">
+        Plate records passing configured format validation.
+      </p>
+
+    </div>
+
+
+    {/* OFFLINE BENCHMARK */}
+
+    <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+
+      <p className="text-xs font-medium uppercase tracking-wide text-green-700">
+        Offline Exact-Match Benchmark
+      </p>
+
+      <p className="mt-2 text-3xl font-bold text-green-700">
+        {offlineBenchmarkRate.toFixed(0)}%
+      </p>
+
+      <p className="mt-2 text-xs text-green-700">
+        {offlineBenchmark.exactMatches}/
+        {offlineBenchmark.totalSamples} manually verified samples.
+      </p>
+
+    </div>
+
+  </div>
+
+
+  {/* BENCHMARK NOTE */}
+
+  <div className="mt-4 rounded-lg border border-green-100 bg-green-50 p-4">
+
+    <p className="text-xs leading-5 text-green-800">
+
+      <span className="font-semibold">
+        Evaluation:
+      </span>{" "}
+      The current offline benchmark achieved{" "}
+      <span className="font-semibold">
+        {offlineBenchmark.exactMatches}/
+        {offlineBenchmark.totalSamples} exact matches
+      </span>{" "}
+      on the manually verified test set.
+
+    </p>
+
+    <p className="mt-1 text-xs leading-5 text-green-700">
+      This benchmark result is specific to the current test set and
+      should not be interpreted as city-wide real-world accuracy.
+    </p>
+
+  </div>
+
+</div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
@@ -330,7 +505,7 @@ export default function Home() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
 
               <p className="text-sm text-slate-500">
-                Live GIS visualization of congestion,
+                GIS visualization of congestion,
                 bottlenecks and vehicle trajectories.
               </p>
 
@@ -393,7 +568,7 @@ export default function Home() {
 
           {/* Camera Network */}
 
-          <DashboardCard title="Camera Network">
+          <DashboardCard title="Multi-Camera Network">
 
             <div className="space-y-3">
 
@@ -423,9 +598,9 @@ export default function Home() {
                         : "text-xs text-red-400"
                     }
                   >
-                    {camera.is_active
-                      ? "ONLINE"
-                      : "OFFLINE"}
+                    {camera.source_type === "REPLAY"
+    ? "REPLAY"
+    : "SIMULATED"}
                   </span>
 
                 </div>
@@ -476,8 +651,8 @@ export default function Home() {
                     }
                   >
                     {detection.plate_valid
-                      ? "VALID"
-                      : "UNREADABLE"}
+  ? "VALIDATED"
+  : "REVIEW"}
                   </span>
 
                 </div>

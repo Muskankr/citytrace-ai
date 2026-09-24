@@ -46,6 +46,13 @@ class Camera(Base):
 
     is_active = Column(Boolean, default=True)
 
+
+    source_type = Column(
+    String(30),
+    nullable=False,
+    default="SIMULATED"
+)
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow
@@ -344,4 +351,39 @@ class Alert(Base):
     is_resolved = Column(
         Boolean,
         default=False
+    )
+
+
+# ============================================================
+# BLACKLISTED VEHICLE TABLE
+# ============================================================
+
+class BlacklistedVehicle(Base):
+    __tablename__ = "blacklisted_vehicles"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    plate_number = Column(
+        String(30),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    reason = Column(
+        String(200)
+    )
+
+    is_active = Column(
+        Boolean,
+        default=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
     )

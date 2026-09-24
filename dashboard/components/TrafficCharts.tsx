@@ -3,6 +3,8 @@
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -17,6 +19,7 @@ import {
 type AnalyticsItem = {
   id: number;
   camera_id: string;
+  timestamp: string;
   vehicle_count: number;
   car_count: number;
   motorcycle_count: number;
@@ -58,8 +61,7 @@ export default function TrafficCharts({
    * Keep only the latest analytics record
    * for each camera.
    *
-   * This prevents old/demo analytics records
-   * from appearing multiple times.
+   * This is used by the camera-level charts.
    */
   const latestByCamera = new Map<string, AnalyticsItem>();
 
@@ -158,6 +160,57 @@ export default function TrafficCharts({
       level,
     };
   });
+
+  /*
+   * -----------------------------
+   * TRAFFIC FLOW TREND
+   * -----------------------------
+   *
+   * Use the historical analytics
+   * returned by the existing API.
+   *
+   * Each point represents the total
+   * vehicle count across cameras at
+   * that analytics timestamp.
+   */
+
+  const trendByTimestamp = new Map<
+    string,
+    number
+  >();
+
+  analytics.forEach((item) => {
+
+    const timestamp = item.timestamp;
+
+    const existing =
+      trendByTimestamp.get(timestamp) || 0;
+
+    trendByTimestamp.set(
+      timestamp,
+      existing + Number(item.vehicle_count || 0)
+    );
+  });
+
+  const trafficFlowData = Array.from(
+    trendByTimestamp.entries()
+  )
+    .sort(
+      ([timestampA], [timestampB]) =>
+        new Date(timestampA).getTime() -
+        new Date(timestampB).getTime()
+    )
+    .map(([timestamp, vehicles]) => ({
+      time: new Date(timestamp).toLocaleTimeString(
+        [],
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      ),
+      vehicles,
+      timestamp,
+    }));
 
   function getCongestionColor(level: string) {
 
@@ -354,6 +407,116 @@ export default function TrafficCharts({
                 />
 
               </PieChart>
+
+            </ResponsiveContainer>
+
+          )}
+
+        </div>
+
+      </div>
+
+
+      {/* TRAFFIC FLOW TREND */}
+
+      <div className="rounded-xl border border-[#263442] bg-[#17212b] p-6 lg:col-span-2">
+
+        <div className="mb-5">
+
+          <h3 className="text-base font-semibold text-[#f1f5f9]">
+            Traffic Flow Trend
+          </h3>
+
+          <p className="mt-1 text-xs text-[#81909e]">
+            Historical vehicle flow across the monitored camera network
+          </p>
+
+        </div>
+
+        <div className="h-[300px]">
+
+          {trafficFlowData.length < 2 ? (
+
+            <div className="flex h-full items-center justify-center">
+
+              <p className="text-sm text-[#81909e]">
+                Insufficient historical traffic data for a trend.
+              </p>
+
+            </div>
+
+          ) : (
+
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+
+              <LineChart
+                data={trafficFlowData}
+                margin={{
+                  top: 5,
+                  right: 10,
+                  left: 0,
+                  bottom: 5,
+                }}
+              >
+
+                <CartesianGrid
+                  stroke="#2a3947"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+
+                <XAxis
+                  dataKey="time"
+                  tick={{
+                    fill: "#91a0ad",
+                    fontSize: 11,
+                  }}
+                  axisLine={{
+                    stroke: "#334454",
+                  }}
+                  tickLine={false}
+                />
+
+                <YAxis
+                  allowDecimals={false}
+                  tick={{
+                    fill: "#91a0ad",
+                    fontSize: 12,
+                  }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+
+                <Tooltip
+                  labelFormatter={(label) =>
+                    `Time: ${label}`
+                  }
+                  formatter={(value) => [
+                    value,
+                    "Vehicles",
+                  ]}
+                  contentStyle={{
+                    backgroundColor: "#111a23",
+                    border: "1px solid #334454",
+                    borderRadius: "8px",
+                    color: "#f1f5f9",
+                  }}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="vehicles"
+                  name="Vehicles"
+                  stroke="#5b8def"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+
+              </LineChart>
 
             </ResponsiveContainer>
 
