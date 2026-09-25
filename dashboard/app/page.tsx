@@ -162,7 +162,7 @@ const offlineBenchmarkRate =
     )
   );
 
-  
+
   const averageSpeed =
     latestAnalytics.length > 0
       ? latestAnalytics.reduce(
@@ -192,7 +192,7 @@ const offlineBenchmarkRate =
     <main className="min-h-screen bg-gray-50">
       <Header />
 
-      <div className="p-6">
+      <div className="px-4 py-5 sm:p-6">
 
         {/* =========================
             OVERVIEW
@@ -201,7 +201,7 @@ const offlineBenchmarkRate =
         <div className="mb-8">
           <div className="flex flex-wrap items-center gap-3">
 
-            <h1 className="text-2xl font-bold text-black">
+            <h1 className="text-xl font-bold text-black sm:text-2xl">
               City Traffic Intelligence Dashboard
             </h1>
 
@@ -576,7 +576,7 @@ const offlineBenchmarkRate =
 
                 <div
                   key={camera.camera_id}
-                  className="flex items-center justify-between rounded-lg bg-slate-950 p-3"
+                 className="flex flex-col gap-2 rounded-lg bg-slate-950 p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
 
                   <div>
@@ -627,7 +627,7 @@ const offlineBenchmarkRate =
 
                 <div
                   key={detection.id}
-                  className="flex items-center justify-between rounded-lg bg-slate-950 p-3"
+                  className="flex flex-col gap-2 rounded-lg bg-slate-950 p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
 
                   <div>

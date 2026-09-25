@@ -312,7 +312,7 @@ export default function TrajectoriesPage() {
     }, [trajectories]);
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen overflow-x-hidden bg-gray-50 px-3 py-4 sm:p-6 lg:p-8">
 
       {/* Header */}
       <div className="mb-8">
@@ -423,7 +423,7 @@ export default function TrajectoriesPage() {
           <div className="grid gap-6 lg:grid-cols-5">
 
             {/* LEFT */}
-            <div className="lg:col-span-2">
+            <div className="min-w-0 lg:col-span-2">
               <DashboardCard title="Detected Routes">
 
                 {filteredTrajectories.length ===
@@ -517,7 +517,7 @@ export default function TrajectoriesPage() {
             </div>
 
             {/* RIGHT */}
-            <div className="lg:col-span-3">
+            <div className="min-w-0 lg:col-span-3">
               <DashboardCard title="Trajectory Details">
 
                 {!selected ? (
@@ -529,14 +529,13 @@ export default function TrajectoriesPage() {
                   <div>
 
                     {/* Plate */}
-                    <div className="mb-6 flex items-center justify-between">
-
+                    <div className="mb-6 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm text-gray-500">
                           Vehicle Plate
                         </p>
 
-                        <h2 className="mt-1 text-3xl font-bold tracking-wider text-gray-900">
+                        <h2 className="mt-1 break-words text-2xl font-bold tracking-wider text-gray-900 sm:text-3xl">
                           {
                             selected.plate_number
                           }
@@ -715,9 +714,9 @@ export default function TrajectoriesPage() {
                     {/* Timeline */}
                     <div className="mt-6">
 
-                      <p className="mb-4 text-sm font-semibold text-gray-700">
-                        Journey Timeline
-                      </p>
+                      <p className="mb-4 text-sm font-semibold text-gray-200">
+  Journey Timeline
+</p>
 
                       <div className="relative ml-3 border-l-2 border-blue-200 pl-6">
 
@@ -726,9 +725,9 @@ export default function TrajectoriesPage() {
 
                           <span className="absolute -left-[34px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500" />
 
-                          <p className="font-semibold text-gray-900">
-                            Journey Started
-                          </p>
+                          <p className="font-semibold text-gray-100">
+  Journey Started
+</p>
 
                           <p className="text-sm text-gray-500">
                             {selectedStartCamera ??
@@ -748,9 +747,9 @@ export default function TrajectoriesPage() {
 
                           <span className="absolute -left-[34px] top-1 h-4 w-4 rounded-full border-4 border-white bg-green-500" />
 
-                          <p className="font-semibold text-gray-900">
-                            Journey Ended
-                          </p>
+                          <p className="font-semibold text-gray-100">
+  Journey Ended
+</p>
 
                           <p className="text-sm text-gray-500">
                             {selectedEndCamera ??
