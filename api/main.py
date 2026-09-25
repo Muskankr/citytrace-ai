@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+
+from database.database import create_tables
+from database.seed import seed_cameras
+
 from api.routes import cameras
 from api.routes import detections
 from api.routes import trajectories
@@ -32,6 +36,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+def startup_event():
+    create_tables()
+    seed_cameras()
 
 # API ROUTES
 
